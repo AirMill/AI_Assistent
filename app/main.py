@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from openai import OpenAI
 
@@ -57,7 +59,8 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Coachable AI Assistant", version="1.2.0", lifespan=lifespan)
+app = FastAPI(title="Coachable AI Assistant", version="1.3.0", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 
 class ChatRequest(BaseModel):
@@ -78,6 +81,11 @@ def read_principles() -> str:
     if not path.exists():
         return ""
     return path.read_text(encoding="utf-8", errors="ignore").strip()
+
+
+@app.get("/")
+def ui() -> FileResponse:
+    return FileResponse("app/static/index.html")
 
 
 @app.get("/health")

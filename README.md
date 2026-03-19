@@ -145,7 +145,25 @@ The server will start on:
 http://localhost:8000
 ```
 
-### 4) Check health
+Open that address in your browser to use the built-in chat UI.
+
+### 4) Open the UI
+
+Go to:
+
+```text
+http://localhost:8000
+```
+
+From the UI you can:
+
+- see whether your API key is configured
+- see how many chunks are indexed
+- click **Refresh books** after adding files
+- click **Full rebuild** to force a new index
+- chat with your assistant in the browser
+
+### 5) Check health manually (optional)
 
 ```bash
 curl http://localhost:8000/health
@@ -153,13 +171,13 @@ curl http://localhost:8000/health
 
 You should get JSON showing status, indexed chunk count, and supported extensions.
 
-### 5) Ask a question
+### 6) Ask a question by API (optional)
 
 ```bash
 curl -X POST http://localhost:8000/chat   -H "Content-Type: application/json"   -d '{"message":"What principles should I use to solve recurring operational problems?"}'
 ```
 
-### 6) Rebuild or refresh the knowledge index
+### 7) Rebuild or refresh the knowledge index
 
 Force a full rebuild:
 
@@ -173,7 +191,7 @@ Refresh only if files changed:
 curl -X POST http://localhost:8000/refresh
 ```
 
-### 7) Add more files later
+### 8) Add more files later
 
 Just drop more supported files into `data/books/` and call:
 
@@ -299,3 +317,16 @@ It may be a scanned PDF with no selectable text. Convert it with OCR first or re
 ## License and usage
 
 Use this starter as a base project for yourself or your friends. Replace the example notes with your own material and build on top of it.
+
+
+## UI overview
+
+The built-in browser UI is meant to make local testing easy. It includes:
+
+- a health badge that tells you whether the API key is configured
+- a chunk counter so you can see whether your books were indexed
+- a **Refresh books** button for quick rescans
+- a **Full rebuild** button for a clean re-index
+- a simple chat area that shows the sources used for an answer
+
+That means you can test the whole project on your PC without using curl or Swagger.

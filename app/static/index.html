@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coachable AI Assistant</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: rgba(18, 25, 47, 0.88);
+      --panel-2: rgba(24, 34, 63, 0.95);
+      --border: rgba(255,255,255,0.08);
+      --text: #edf2ff;
+      --muted: #a8b3cf;
+      --accent: #7c9cff;
+      --accent-2: #5eead4;
+      --danger: #ff8f8f;
+      --ok: #8ef0aa;
+      --shadow: 0 18px 60px rgba(0,0,0,.35);
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(124,156,255,.14), transparent 32%),
+        radial-gradient(circle at right, rgba(94,234,212,.10), transparent 25%),
+        linear-gradient(180deg, #090d1a 0%, #0b1020 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .shell {
+      width: min(1200px, calc(100vw - 24px));
+      margin: 24px auto;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 20px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+    .sidebar { padding: 18px; }
+    .main { display: grid; grid-template-rows: auto 1fr auto; min-height: calc(100vh - 48px); }
+    h1 { font-size: 1.45rem; margin: 0 0 8px; }
+    h2 { font-size: 1rem; margin: 0 0 10px; }
+    p, li { color: var(--muted); line-height: 1.45; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,.04);
+      border: 1px solid var(--border); font-size: .9rem; color: var(--text);
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px rgba(124,156,255,.14); }
+    .status-ok .dot { background: var(--ok); box-shadow: 0 0 0 4px rgba(142,240,170,.12); }
+    .status-bad .dot { background: var(--danger); box-shadow: 0 0 0 4px rgba(255,143,143,.12); }
+    .stack { display: grid; gap: 14px; }
+    .mini-card {
+      padding: 14px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    button {
+      border: 0; cursor: pointer; color: white; font-weight: 600;
+      background: linear-gradient(135deg, var(--accent), #6c63ff);
+      padding: 11px 14px; border-radius: 12px;
+      transition: transform .12s ease, opacity .12s ease;
+    }
+    button.secondary { background: rgba(255,255,255,.06); border: 1px solid var(--border); color: var(--text); }
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+    .main-top { padding: 20px; border-bottom: 1px solid var(--border); }
+    .messages { padding: 20px; overflow: auto; display: grid; gap: 14px; }
+    .msg {
+      max-width: 840px; padding: 14px 16px; border-radius: 16px; line-height: 1.5;
+      border: 1px solid var(--border);
+      white-space: pre-wrap;
+    }
+    .user { justify-self: end; background: rgba(124,156,255,.15); }
+    .assistant { justify-self: start; background: rgba(255,255,255,.05); }
+    .meta { font-size: .82rem; color: var(--muted); margin-bottom: 6px; }
+    .composer { padding: 16px 20px 20px; border-top: 1px solid var(--border); }
+    .composer-box {
+      display: grid; grid-template-columns: 1fr auto; gap: 12px;
+      background: var(--panel-2); border: 1px solid var(--border); border-radius: 18px; padding: 12px;
+    }
+    textarea {
+      width: 100%; min-height: 96px; resize: vertical; border: 0; outline: 0;
+      background: transparent; color: var(--text); font: inherit; line-height: 1.45;
+    }
+    .sources {
+      margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .chip {
+      padding: 6px 10px; border-radius: 999px; background: rgba(94,234,212,.08);
+      border: 1px solid rgba(94,234,212,.18); color: #c7fff6; font-size: .82rem;
+    }
+    .muted { color: var(--muted); }
+    .tip { font-size: .9rem; }
+    code { background: rgba(255,255,255,.06); padding: 2px 6px; border-radius: 8px; }
+    .hidden { display: none; }
+    @media (max-width: 920px) {
+      .shell { grid-template-columns: 1fr; }
+      .main { min-height: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="card sidebar stack">
+      <div>
+        <h1>Coachable AI Assistant</h1>
+        <p>Drop your books into <code>data/books/</code>, run the app, then chat here in the browser.</p>
+      </div>
+
+      <div class="mini-card stack">
+        <h2>Server status</h2>
+        <div id="healthBadge" class="badge"><span class="dot"></span><span>Checking…</span></div>
+        <div class="tip muted" id="healthText">Waiting for server health.</div>
+      </div>
+
+      <div class="mini-card stack">
+        <h2>Knowledge</h2>
+        <div class="row">
+          <button id="refreshBtn" class="secondary">Refresh books</button>
+          <button id="rebuildBtn" class="secondary">Full rebuild</button>
+        </div>
+        <div class="tip muted" id="ingestResult">No action yet.</div>
+      </div>
+
+      <div class="mini-card stack">
+        <h2>How to use it</h2>
+        <p>1. Put files in <code>data/books/</code>.</p>
+        <p>2. Add your API key in <code>.env</code>.</p>
+        <p>3. Click <strong>Refresh books</strong>.</p>
+        <p>4. Ask questions in the chat panel.</p>
+      </div>
+    </aside>
+
+    <section class="card main">
+      <div class="main-top">
+        <div class="row" style="justify-content: space-between;">
+          <div>
+            <h2 style="font-size:1.1rem; margin-bottom:6px;">Chat</h2>
+            <div class="muted">Ask about the ideas, notes, and principles you dropped into the books folder.</div>
+          </div>
+          <label class="badge"><input id="useKnowledge" type="checkbox" checked /> <span>Use knowledge base</span></label>
+        </div>
+      </div>
+
+      <div id="messages" class="messages">
+        <div class="msg assistant">
+          <div class="meta">Assistant</div>
+          Hey — I’m ready. Put files into <code>data/books/</code>, make sure your <code>OPENAI_API_KEY</code> is set in <code>.env</code>, then ask me something practical.
+        </div>
+      </div>
+
+      <div class="composer">
+        <div class="composer-box">
+          <textarea id="prompt" placeholder="Ask a question about your books, principles, or notes..."></textarea>
+          <div class="stack" style="align-content:end;">
+            <button id="sendBtn">Send</button>
+            <button id="clearBtn" class="secondary">Clear chat</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const messages = document.getElementById('messages');
+    const promptBox = document.getElementById('prompt');
+    const sendBtn = document.getElementById('sendBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const rebuildBtn = document.getElementById('rebuildBtn');
+    const useKnowledge = document.getElementById('useKnowledge');
+    const healthBadge = document.getElementById('healthBadge');
+    const healthText = document.getElementById('healthText');
+    const ingestResult = document.getElementById('ingestResult');
+
+    function addMessage(role, text, sources = []) {
+      const el = document.createElement('div');
+      el.className = `msg ${role}`;
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = role === 'user' ? 'You' : 'Assistant';
+      const body = document.createElement('div');
+      body.textContent = text;
+      el.appendChild(meta);
+      el.appendChild(body);
+
+      if (sources.length) {
+        const box = document.createElement('div');
+        box.className = 'sources';
+        sources.forEach(src => {
+          const chip = document.createElement('div');
+          chip.className = 'chip';
+          chip.textContent = `${src.source} • ${src.score}`;
+          box.appendChild(chip);
+        });
+        el.appendChild(box);
+      }
+
+      messages.appendChild(el);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    async function fetchJson(url, options = {}) {
+      const res = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(options.headers || {}),
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || `Request failed with ${res.status}`);
+      }
+      return data;
+    }
+
+    async function loadHealth() {
+      try {
+        const data = await fetchJson('/health');
+        healthBadge.className = 'badge ' + (data.api_key_configured ? 'status-ok' : 'status-bad');
+        healthBadge.querySelector('span:last-child').textContent = data.api_key_configured ? 'Ready' : 'Needs API key';
+        healthText.textContent = `Chunks indexed: ${data.indexed_chunks} · Extensions: ${data.supported_extensions.join(', ')}`;
+      } catch (err) {
+        healthBadge.className = 'badge status-bad';
+        healthBadge.querySelector('span:last-child').textContent = 'Offline';
+        healthText.textContent = err.message;
+      }
+    }
+
+    async function runIngest(endpoint) {
+      ingestResult.textContent = 'Working…';
+      try {
+        const data = await fetchJson(endpoint, { method: 'POST' });
+        ingestResult.textContent = `Indexed ${data.files_indexed} files and ${data.chunks_indexed} chunks${data.rebuilt === false ? ' (no rebuild needed)' : ''}.`;
+        await loadHealth();
+      } catch (err) {
+        ingestResult.textContent = err.message;
+      }
+    }
+
+    async function sendMessage() {
+      const message = promptBox.value.trim();
+      if (!message) return;
+      addMessage('user', message);
+      promptBox.value = '';
+      sendBtn.disabled = true;
+
+      try {
+        const data = await fetchJson('/chat', {
+          method: 'POST',
+          body: JSON.stringify({ message, use_knowledge: useKnowledge.checked }),
+        });
+        addMessage('assistant', data.reply || 'No reply returned.', data.sources || []);
+      } catch (err) {
+        addMessage('assistant', `Error: ${err.message}`);
+      } finally {
+        sendBtn.disabled = false;
+        promptBox.focus();
+        await loadHealth();
+      }
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    clearBtn.addEventListener('click', () => {
+      messages.innerHTML = '';
+      addMessage('assistant', 'Chat cleared. Ask your next question whenever you are ready.');
+    });
+    refreshBtn.addEventListener('click', () => runIngest('/refresh'));
+    rebuildBtn.addEventListener('click', () => runIngest('/ingest'));
+    promptBox.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+      }
+    });
+
+    loadHealth();
+  </script>
+</body>
+</html>
