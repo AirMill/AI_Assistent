@@ -1,0 +1,9 @@
+services:
+  ai-assistant:
+    build: .
+    container_name: coachable-ai-assistant
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/repo/data

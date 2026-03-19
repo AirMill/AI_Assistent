@@ -1,0 +1,16 @@
+Put your files in this folder.
+
+Supported by default:
+- .pdf
+- .docx
+- .md
+- .txt
+
+Recommended:
+- your own summaries
+- principles
+- frameworks
+- notes distilled from books
+
+After adding files, start the app or call:
+POST /refresh
