@@ -33,6 +33,7 @@ Behavior:
 - if `.env` does not exist, the app auto-creates one with starter values
 - if no OpenAI API key is set, the server still starts
 - health checks still work
+- uploads still work
 - chat and indexing endpoints return a clear setup message until a real API key is added
 
 That means your friends can start the project without wrestling with config first.
@@ -44,7 +45,9 @@ That means your friends can start the project without wrestling with config firs
 ├── app/
 │   ├── knowledge.py
 │   ├── main.py
-│   └── settings.py
+│   ├── settings.py
+│   └── static/
+│       └── index.html
 ├── data/
 │   ├── books/
 │   │   ├── principles.md
@@ -67,13 +70,14 @@ That means your friends can start the project without wrestling with config firs
 ### Option A — fastest path
 
 1. Clone the repo.
-2. Put your files into `data/books/`.
-3. Start the app:
+2. Start the app:
    ```bash
    docker compose up --build
    ```
-4. Open the generated `.env` and paste your OpenAI key.
-5. Restart the app:
+3. Open `http://localhost:8000`
+4. Drag and drop files into the upload panel.
+5. Open the generated `.env` and paste your OpenAI key.
+6. Restart the app:
    ```bash
    docker compose up --build
    ```
@@ -86,20 +90,63 @@ That means your friends can start the project without wrestling with config firs
    cp .env.example .env
    ```
 3. Open `.env` and set `OPENAI_API_KEY`.
-4. Put your files into `data/books/`.
-5. Start the app:
+4. Start the app:
    ```bash
    docker compose up --build
    ```
+5. Open `http://localhost:8000`
+6. Drag and drop files into the upload panel or put them in `data/books/`.
 
 ## Tutorial: how to use it
 
-### 1) Add your books and notes
+### 1) Start the app
+
+```bash
+docker compose up --build
+```
+
+The server will start on:
+
+```text
+http://localhost:8000
+```
+
+Open that address in your browser to use the built-in chat UI.
+
+### 2) Add your books and notes
+
+You now have two ways to add material:
+
+#### A. Drag and drop in the browser UI
+
+Open:
+
+```text
+http://localhost:8000
+```
+
+Then drag `.pdf`, `.docx`, `.md`, or `.txt` files into the upload area and click **Upload files**.
+
+The app will save them into:
+
+```text
+data/books/
+```
+
+If your API key is already configured, the app will also refresh the knowledge index automatically.
+
+#### B. Copy files into the folder manually
 
 Put files into:
 
 ```text
 data/books/
+```
+
+Then click **Refresh books** in the UI, or call:
+
+```bash
+curl -X POST http://localhost:8000/refresh
 ```
 
 Good inputs include:
@@ -119,7 +166,7 @@ Notes:
 - text PDFs work best
 - scanned image PDFs may extract poorly without OCR
 
-### 2) Add your logic
+### 3) Add your logic
 
 Use `data/books/principles.md` to teach the assistant how you want it to reason.
 
@@ -133,20 +180,6 @@ A strong `principles.md` usually contains:
 
 This is the best place to put the “logic” you want to teach it.
 
-### 3) Start the app
-
-```bash
-docker compose up --build
-```
-
-The server will start on:
-
-```text
-http://localhost:8000
-```
-
-Open that address in your browser to use the built-in chat UI.
-
 ### 4) Open the UI
 
 Go to:
@@ -159,6 +192,7 @@ From the UI you can:
 
 - see whether your API key is configured
 - see how many chunks are indexed
+- upload files with drag and drop
 - click **Refresh books** after adding files
 - click **Full rebuild** to force a new index
 - chat with your assistant in the browser
@@ -169,15 +203,23 @@ From the UI you can:
 curl http://localhost:8000/health
 ```
 
-You should get JSON showing status, indexed chunk count, and supported extensions.
-
 ### 6) Ask a question by API (optional)
 
 ```bash
-curl -X POST http://localhost:8000/chat   -H "Content-Type: application/json"   -d '{"message":"What principles should I use to solve recurring operational problems?"}'
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"What principles should I use to solve recurring operational problems?"}'
 ```
 
-### 7) Rebuild or refresh the knowledge index
+### 7) Upload files by API (optional)
+
+```bash
+curl -X POST http://localhost:8000/upload \
+  -F "files=@./some-book.pdf" \
+  -F "files=@./notes.docx"
+```
+
+### 8) Rebuild or refresh the knowledge index
 
 Force a full rebuild:
 
@@ -191,142 +233,59 @@ Refresh only if files changed:
 curl -X POST http://localhost:8000/refresh
 ```
 
-### 8) Add more files later
+## GitHub sharing tips
 
-Just drop more supported files into `data/books/` and call:
+Commit these files:
 
-```bash
-curl -X POST http://localhost:8000/refresh
+- app code
+- Dockerfile
+- docker-compose.yml
+- `.env.example`
+- README
+- sample files
+
+Do **not** commit:
+
+- `.env`
+- `data/index/`
+- personal API keys
+
+Recommended `.gitignore` entries:
+
+```gitignore
+.env
+data/index/
+__pycache__/
+*.pyc
 ```
 
-## API endpoints
+## Typical workflow
 
-### `GET /health`
-
-Shows whether the server is up and whether an API key is configured.
-
-### `POST /chat`
-
-Ask the assistant a question.
-
-Example body:
-
-```json
-{
-  "message": "Give me a practical plan for fixing a recurring team bottleneck.",
-  "use_knowledge": true
-}
-```
-
-### `POST /ingest`
-
-Forces a full index rebuild from `data/books/`.
-
-### `POST /refresh`
-
-Only rebuilds if files have changed.
-
-## Recommended way to teach it
-
-Best results usually come from your own distilled notes rather than giant raw dumps.
-
-A strong pattern is:
-
-- `principles.md` for reasoning style
-- one file per topic
-- concise summaries from books
-- examples of decisions and why they worked
-- step-by-step methods you want repeated
-
-## Example workflow
-
-You read a business or psychology book and then create a note like this:
-
-- `how_to_handle_conflict.md`
-- `decision_frameworks.md`
-- `leadership_principles.docx`
-- `systems_thinking.pdf`
-
-The assistant will search those files and use them to answer in a way that reflects your material.
-
-## Running without Docker
-
-You can also run it locally:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-On Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-## Sharing it on GitHub
-
-Recommended setup:
-
-1. commit the code
-2. do not commit `.env`
-3. do not commit private books or notes
-4. keep only the example files in `data/books/`
-5. let each person add their own files locally
-
-The included `.gitignore` already keeps most personal content out of Git.
-
-## Important limits
-
-- scanned-image PDFs are not OCRed in this version
-- `.doc` files are not supported by default
-- very large libraries may eventually need a vector database
-- raw copyrighted books should not be published in a public repo
+1. Start the app.
+2. Drop books or notes into the UI.
+3. Add or refine `principles.md`.
+4. Refresh books.
+5. Ask questions.
+6. Keep improving your notes over time.
 
 ## Troubleshooting
 
-### The server starts but chat says the API key is missing
+### The server runs but chat says API key is missing
 
-That means `.env` exists but `OPENAI_API_KEY` is empty. Add your key and restart.
+That means the app started in zero-config mode. Add your real key to `.env` and restart.
 
-### I added files but answers do not mention them
+### Upload works but indexing does not happen
 
-Call:
+Same root cause: upload does not require a key, but embedding and chat do.
 
-```bash
-curl -X POST http://localhost:8000/refresh
-```
+### My PDF gives weak answers
 
-### A PDF does not extract well
+It may be an image-only PDF. This starter extracts text from text PDFs, not scanned images with OCR.
 
-It may be a scanned PDF with no selectable text. Convert it with OCR first or replace it with your own notes.
+### Port 8000 is busy
 
-## Easy next upgrades
+Change the port mapping in `docker-compose.yml`.
 
-- OCR for scanned PDFs
-- browser chat UI
-- Telegram or Discord bot
-- authentication
-- vector database for larger libraries
+## License / usage note
 
-## License and usage
-
-Use this starter as a base project for yourself or your friends. Replace the example notes with your own material and build on top of it.
-
-
-## UI overview
-
-The built-in browser UI is meant to make local testing easy. It includes:
-
-- a health badge that tells you whether the API key is configured
-- a chunk counter so you can see whether your books were indexed
-- a **Refresh books** button for quick rescans
-- a **Full rebuild** button for a clean re-index
-- a simple chat area that shows the sources used for an answer
-
-That means you can test the whole project on your PC without using curl or Swagger.
+If you share this publicly, it is safer to upload your own notes and summaries than raw copyrighted books.

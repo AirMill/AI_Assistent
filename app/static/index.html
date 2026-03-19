@@ -32,10 +32,10 @@
       min-height: 100vh;
     }
     .shell {
-      width: min(1200px, calc(100vw - 24px));
+      width: min(1240px, calc(100vw - 24px));
       margin: 24px auto;
       display: grid;
-      grid-template-columns: 320px 1fr;
+      grid-template-columns: 340px 1fr;
       gap: 20px;
     }
     .card {
@@ -45,11 +45,12 @@
       box-shadow: var(--shadow);
       backdrop-filter: blur(12px);
     }
-    .sidebar { padding: 18px; }
+    .sidebar { padding: 18px; display: grid; gap: 14px; align-content: start; }
     .main { display: grid; grid-template-rows: auto 1fr auto; min-height: calc(100vh - 48px); }
     h1 { font-size: 1.45rem; margin: 0 0 8px; }
     h2 { font-size: 1rem; margin: 0 0 10px; }
     p, li { color: var(--muted); line-height: 1.45; }
+    .small { font-size: .92rem; }
     .badge {
       display: inline-flex; align-items: center; gap: 8px;
       padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,.04);
@@ -79,11 +80,11 @@
     .messages { padding: 20px; overflow: auto; display: grid; gap: 14px; }
     .msg {
       max-width: 840px; padding: 14px 16px; border-radius: 16px; line-height: 1.5;
-      border: 1px solid var(--border);
-      white-space: pre-wrap;
+      border: 1px solid var(--border); white-space: pre-wrap;
     }
     .user { justify-self: end; background: rgba(124,156,255,.15); }
     .assistant { justify-self: start; background: rgba(255,255,255,.05); }
+    .system { justify-self: stretch; background: rgba(94,234,212,.08); }
     .meta { font-size: .82rem; color: var(--muted); margin-bottom: 6px; }
     .composer { padding: 16px 20px 20px; border-top: 1px solid var(--border); }
     .composer-box {
@@ -94,18 +95,63 @@
       width: 100%; min-height: 96px; resize: vertical; border: 0; outline: 0;
       background: transparent; color: var(--text); font: inherit; line-height: 1.45;
     }
-    .sources {
-      margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;
-    }
+    .sources { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
     .chip {
-      padding: 6px 10px; border-radius: 999px; background: rgba(94,234,212,.08);
-      border: 1px solid rgba(94,234,212,.18); color: #c7fff6; font-size: .82rem;
+      font-size: .8rem; color: var(--text);
+      background: rgba(124,156,255,.12);
+      border: 1px solid rgba(124,156,255,.22);
+      border-radius: 999px; padding: 6px 10px;
     }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat { padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,.03); }
+    .stat strong { display: block; font-size: 1.1rem; color: var(--text); }
     .muted { color: var(--muted); }
-    .tip { font-size: .9rem; }
-    code { background: rgba(255,255,255,.06); padding: 2px 6px; border-radius: 8px; }
-    .hidden { display: none; }
-    @media (max-width: 920px) {
+    .dropzone {
+      border: 2px dashed rgba(124,156,255,.35);
+      border-radius: 16px;
+      padding: 16px;
+      text-align: center;
+      background: rgba(124,156,255,.06);
+      transition: border-color .15s ease, background .15s ease, transform .15s ease;
+    }
+    .dropzone.dragover {
+      border-color: var(--accent-2);
+      background: rgba(94,234,212,.10);
+      transform: translateY(-1px);
+    }
+    .file-list {
+      margin-top: 12px;
+      display: grid;
+      gap: 8px;
+      max-height: 180px;
+      overflow: auto;
+    }
+    .file-item {
+      padding: 9px 11px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: .9rem;
+    }
+    .hint { font-size: .85rem; color: var(--muted); }
+    .link-btn {
+      appearance: none; border: 0; padding: 0; margin: 0;
+      background: transparent; color: var(--accent-2); cursor: pointer;
+      font: inherit;
+    }
+    .pill {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid var(--border);
+      font-size: .8rem;
+      color: var(--muted);
+    }
+    @media (max-width: 980px) {
       .shell { grid-template-columns: 1fr; }
       .main { min-height: auto; }
     }
@@ -113,181 +159,306 @@
 </head>
 <body>
   <div class="shell">
-    <aside class="card sidebar stack">
+    <aside class="card sidebar">
       <div>
         <h1>Coachable AI Assistant</h1>
-        <p>Drop your books into <code>data/books/</code>, run the app, then chat here in the browser.</p>
+        <p class="small">Drop files into the UI or into <code>data/books/</code>, then chat with the assistant using your own notes and principles.</p>
+      </div>
+
+      <div class="mini-card">
+        <div id="statusBadge" class="badge"><span class="dot"></span><span>Checking status...</span></div>
       </div>
 
       <div class="mini-card stack">
-        <h2>Server status</h2>
-        <div id="healthBadge" class="badge"><span class="dot"></span><span>Checking…</span></div>
-        <div class="tip muted" id="healthText">Waiting for server health.</div>
-      </div>
-
-      <div class="mini-card stack">
-        <h2>Knowledge</h2>
+        <div class="stats">
+          <div class="stat"><span class="muted">Indexed chunks</span><strong id="indexedChunks">-</strong></div>
+          <div class="stat"><span class="muted">API key</span><strong id="apiKeyState">-</strong></div>
+        </div>
         <div class="row">
           <button id="refreshBtn" class="secondary">Refresh books</button>
-          <button id="rebuildBtn" class="secondary">Full rebuild</button>
+          <button id="rebuildBtn">Full rebuild</button>
         </div>
-        <div class="tip muted" id="ingestResult">No action yet.</div>
       </div>
 
       <div class="mini-card stack">
-        <h2>How to use it</h2>
-        <p>1. Put files in <code>data/books/</code>.</p>
-        <p>2. Add your API key in <code>.env</code>.</p>
-        <p>3. Click <strong>Refresh books</strong>.</p>
-        <p>4. Ask questions in the chat panel.</p>
+        <div>
+          <h2>Upload books</h2>
+          <p class="small">Drag and drop supported files right here.</p>
+        </div>
+
+        <div id="dropzone" class="dropzone">
+          <div><strong>Drop files here</strong></div>
+          <div class="hint">or</div>
+          <div class="row" style="justify-content:center; margin-top:10px;">
+            <button id="browseBtn" class="secondary" type="button">Choose files</button>
+            <button id="uploadBtn" type="button" disabled>Upload files</button>
+          </div>
+          <div class="hint" style="margin-top:10px;">Supported: <span id="extList">.pdf, .docx, .md, .txt</span></div>
+          <input id="fileInput" type="file" multiple hidden accept=".pdf,.docx,.md,.txt" />
+          <div id="fileList" class="file-list"></div>
+        </div>
+      </div>
+
+      <div class="mini-card stack">
+        <h2>How to teach it</h2>
+        <p class="small">Put your logic into <code>data/books/principles.md</code>. Add notes, summaries, and frameworks. The assistant will prefer those over generic advice.</p>
+        <div class="row">
+          <span class="pill" id="knowledgeDir">data/books</span>
+          <span class="pill" id="autoIngest">Auto-ingest: yes</span>
+        </div>
       </div>
     </aside>
 
-    <section class="card main">
+    <main class="card main">
       <div class="main-top">
-        <div class="row" style="justify-content: space-between;">
-          <div>
-            <h2 style="font-size:1.1rem; margin-bottom:6px;">Chat</h2>
-            <div class="muted">Ask about the ideas, notes, and principles you dropped into the books folder.</div>
-          </div>
-          <label class="badge"><input id="useKnowledge" type="checkbox" checked /> <span>Use knowledge base</span></label>
-        </div>
+        <h2 style="margin:0 0 8px;">Browser chat</h2>
+        <p class="small" style="margin:0;">Ask questions, refresh your knowledge base, or upload books directly here.</p>
       </div>
 
-      <div id="messages" class="messages">
+      <section id="messages" class="messages">
         <div class="msg assistant">
           <div class="meta">Assistant</div>
-          Hey — I’m ready. Put files into <code>data/books/</code>, make sure your <code>OPENAI_API_KEY</code> is set in <code>.env</code>, then ask me something practical.
+          Drop books into the upload panel, then ask me about the ideas inside them.
         </div>
-      </div>
+      </section>
 
-      <div class="composer">
+      <section class="composer">
         <div class="composer-box">
-          <textarea id="prompt" placeholder="Ask a question about your books, principles, or notes..."></textarea>
-          <div class="stack" style="align-content:end;">
+          <textarea id="prompt" placeholder="Ask a question about your books, notes, or principles..."></textarea>
+          <div class="stack" style="align-content:space-between;">
             <button id="sendBtn">Send</button>
-            <button id="clearBtn" class="secondary">Clear chat</button>
+            <button id="clearBtn" class="secondary" type="button">Clear chat</button>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </main>
   </div>
 
   <script>
+    const statusBadge = document.getElementById('statusBadge');
+    const indexedChunks = document.getElementById('indexedChunks');
+    const apiKeyState = document.getElementById('apiKeyState');
+    const knowledgeDir = document.getElementById('knowledgeDir');
+    const autoIngest = document.getElementById('autoIngest');
+    const extList = document.getElementById('extList');
     const messages = document.getElementById('messages');
     const promptBox = document.getElementById('prompt');
     const sendBtn = document.getElementById('sendBtn');
     const clearBtn = document.getElementById('clearBtn');
     const refreshBtn = document.getElementById('refreshBtn');
     const rebuildBtn = document.getElementById('rebuildBtn');
-    const useKnowledge = document.getElementById('useKnowledge');
-    const healthBadge = document.getElementById('healthBadge');
-    const healthText = document.getElementById('healthText');
-    const ingestResult = document.getElementById('ingestResult');
+    const browseBtn = document.getElementById('browseBtn');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const fileInput = document.getElementById('fileInput');
+    const fileList = document.getElementById('fileList');
+    const dropzone = document.getElementById('dropzone');
 
-    function addMessage(role, text, sources = []) {
-      const el = document.createElement('div');
-      el.className = `msg ${role}`;
-      const meta = document.createElement('div');
-      meta.className = 'meta';
-      meta.textContent = role === 'user' ? 'You' : 'Assistant';
-      const body = document.createElement('div');
-      body.textContent = text;
-      el.appendChild(meta);
-      el.appendChild(body);
+    let selectedFiles = [];
 
-      if (sources.length) {
-        const box = document.createElement('div');
-        box.className = 'sources';
-        sources.forEach(src => {
-          const chip = document.createElement('div');
-          chip.className = 'chip';
-          chip.textContent = `${src.source} • ${src.score}`;
-          box.appendChild(chip);
-        });
-        el.appendChild(box);
+    function escapeHtml(value) {
+      return value
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
+    }
+
+    function setBusy(button, busy, label) {
+      if (!button) return;
+      button.disabled = busy;
+      if (busy && label) button.dataset.originalText = button.textContent;
+      if (busy && label) button.textContent = label;
+      if (!busy && button.dataset.originalText) {
+        button.textContent = button.dataset.originalText;
+        delete button.dataset.originalText;
       }
+    }
 
-      messages.appendChild(el);
+    function appendMessage(role, text, sources = []) {
+      const wrapper = document.createElement('div');
+      wrapper.className = `msg ${role}`;
+      const sourceHtml = sources.length
+        ? `<div class="sources">${sources.map(s => `<span class="chip">${escapeHtml(s.source)} · ${s.score}</span>`).join('')}</div>`
+        : '';
+      wrapper.innerHTML = `
+        <div class="meta">${role === 'user' ? 'You' : role === 'system' ? 'System' : 'Assistant'}</div>
+        <div>${escapeHtml(text)}</div>
+        ${sourceHtml}
+      `;
+      messages.appendChild(wrapper);
       messages.scrollTop = messages.scrollHeight;
     }
 
-    async function fetchJson(url, options = {}) {
-      const res = await fetch(url, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(options.headers || {}),
-        },
+    function renderFileList() {
+      fileList.innerHTML = '';
+      if (!selectedFiles.length) return;
+
+      selectedFiles.forEach((file, index) => {
+        const row = document.createElement('div');
+        row.className = 'file-item';
+        row.innerHTML = `
+          <span>${escapeHtml(file.name)} <span class="muted">(${Math.max(1, Math.round(file.size / 1024))} KB)</span></span>
+          <button class="link-btn" data-index="${index}" type="button">remove</button>
+        `;
+        fileList.appendChild(row);
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.detail || `Request failed with ${res.status}`);
-      }
-      return data;
+
+      uploadBtn.disabled = selectedFiles.length === 0;
     }
+
+    function mergeFiles(newFiles) {
+      const existing = new Map(selectedFiles.map(file => [`${file.name}:${file.size}`, file]));
+      for (const file of newFiles) {
+        existing.set(`${file.name}:${file.size}`, file);
+      }
+      selectedFiles = Array.from(existing.values());
+      renderFileList();
+    }
+
+    fileList.addEventListener('click', (event) => {
+      const btn = event.target.closest('[data-index]');
+      if (!btn) return;
+      const index = Number(btn.dataset.index);
+      selectedFiles.splice(index, 1);
+      renderFileList();
+      uploadBtn.disabled = selectedFiles.length === 0;
+    });
+
+    browseBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', () => {
+      mergeFiles(Array.from(fileInput.files || []));
+      fileInput.value = '';
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        dropzone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        if (eventName === 'drop') {
+          const files = Array.from(event.dataTransfer?.files || []);
+          mergeFiles(files);
+        }
+        dropzone.classList.remove('dragover');
+      });
+    });
 
     async function loadHealth() {
-      try {
-        const data = await fetchJson('/health');
-        healthBadge.className = 'badge ' + (data.api_key_configured ? 'status-ok' : 'status-bad');
-        healthBadge.querySelector('span:last-child').textContent = data.api_key_configured ? 'Ready' : 'Needs API key';
-        healthText.textContent = `Chunks indexed: ${data.indexed_chunks} · Extensions: ${data.supported_extensions.join(', ')}`;
-      } catch (err) {
-        healthBadge.className = 'badge status-bad';
-        healthBadge.querySelector('span:last-child').textContent = 'Offline';
-        healthText.textContent = err.message;
-      }
+      const response = await fetch('/health');
+      const data = await response.json();
+
+      const ok = data.status === 'ok';
+      statusBadge.className = `badge ${ok ? 'status-ok' : 'status-bad'}`;
+      statusBadge.innerHTML = `<span class="dot"></span><span>${ok ? 'Server ready' : 'Server issue'}</span>`;
+
+      indexedChunks.textContent = data.indexed_chunks ?? 0;
+      apiKeyState.textContent = data.api_key_configured ? 'Configured' : 'Missing';
+      knowledgeDir.textContent = data.knowledge_dir || 'data/books';
+      autoIngest.textContent = `Auto-ingest: ${data.auto_ingest_on_startup ? 'yes' : 'no'}`;
+      extList.textContent = (data.supported_extensions || []).join(', ');
+      fileInput.accept = (data.supported_extensions || []).join(',');
     }
 
-    async function runIngest(endpoint) {
-      ingestResult.textContent = 'Working…';
+    async function runJsonAction(url, button, busyLabel) {
+      setBusy(button, true, busyLabel);
       try {
-        const data = await fetchJson(endpoint, { method: 'POST' });
-        ingestResult.textContent = `Indexed ${data.files_indexed} files and ${data.chunks_indexed} chunks${data.rebuilt === false ? ' (no rebuild needed)' : ''}.`;
+        const response = await fetch(url, { method: 'POST' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Request failed');
+        appendMessage('system', `${data.rebuilt ? 'Rebuilt' : 'Refreshed'} knowledge base. Indexed ${data.chunks_indexed} chunks from ${data.files_indexed} files.`);
         await loadHealth();
-      } catch (err) {
-        ingestResult.textContent = err.message;
+      } catch (error) {
+        appendMessage('system', error.message || 'Request failed.');
+      } finally {
+        setBusy(button, false);
       }
     }
 
-    async function sendMessage() {
+    async function uploadSelectedFiles() {
+      if (!selectedFiles.length) return;
+      setBusy(uploadBtn, true, 'Uploading...');
+      try {
+        const formData = new FormData();
+        selectedFiles.forEach(file => formData.append('files', file));
+
+        const response = await fetch('/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Upload failed');
+
+        appendMessage('system', data.message || 'Files uploaded.');
+        if (Array.isArray(data.uploaded_files) && data.uploaded_files.length) {
+          appendMessage('system', `Saved files:\n${data.uploaded_files.join('\n')}`);
+        }
+        if (data.ingest) {
+          appendMessage(
+            'system',
+            `Index refreshed. Indexed ${data.ingest.chunks_indexed} chunks from ${data.ingest.files_indexed} files.`
+          );
+        }
+
+        selectedFiles = [];
+        renderFileList();
+        await loadHealth();
+      } catch (error) {
+        appendMessage('system', error.message || 'Upload failed.');
+      } finally {
+        setBusy(uploadBtn, false);
+      }
+    }
+
+    async function sendPrompt() {
       const message = promptBox.value.trim();
       if (!message) return;
-      addMessage('user', message);
+
+      appendMessage('user', message);
       promptBox.value = '';
-      sendBtn.disabled = true;
+      setBusy(sendBtn, true, 'Sending...');
 
       try {
-        const data = await fetchJson('/chat', {
+        const response = await fetch('/chat', {
           method: 'POST',
-          body: JSON.stringify({ message, use_knowledge: useKnowledge.checked }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, use_knowledge: true })
         });
-        addMessage('assistant', data.reply || 'No reply returned.', data.sources || []);
-      } catch (err) {
-        addMessage('assistant', `Error: ${err.message}`);
-      } finally {
-        sendBtn.disabled = false;
-        promptBox.focus();
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Chat failed');
+        appendMessage('assistant', data.reply || '(No response text)', data.sources || []);
         await loadHealth();
+      } catch (error) {
+        appendMessage('system', error.message || 'Chat failed.');
+      } finally {
+        setBusy(sendBtn, false);
       }
     }
 
-    sendBtn.addEventListener('click', sendMessage);
-    clearBtn.addEventListener('click', () => {
-      messages.innerHTML = '';
-      addMessage('assistant', 'Chat cleared. Ask your next question whenever you are ready.');
-    });
-    refreshBtn.addEventListener('click', () => runIngest('/refresh'));
-    rebuildBtn.addEventListener('click', () => runIngest('/ingest'));
+    sendBtn.addEventListener('click', sendPrompt);
     promptBox.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        sendMessage();
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        sendPrompt();
       }
     });
+    clearBtn.addEventListener('click', () => {
+      messages.innerHTML = '';
+      appendMessage('assistant', 'Chat cleared. Ask me about your uploaded materials.');
+    });
+    refreshBtn.addEventListener('click', () => runJsonAction('/refresh', refreshBtn, 'Refreshing...'));
+    rebuildBtn.addEventListener('click', () => runJsonAction('/ingest', rebuildBtn, 'Rebuilding...'));
+    uploadBtn.addEventListener('click', uploadSelectedFiles);
 
-    loadHealth();
+    loadHealth().catch(() => {
+      appendMessage('system', 'Could not reach the server. Make sure the app is running.');
+      statusBadge.className = 'badge status-bad';
+      statusBadge.innerHTML = '<span class="dot"></span><span>Server unreachable</span>';
+    });
   </script>
 </body>
 </html>

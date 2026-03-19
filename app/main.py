@@ -2,11 +2,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
 from openai import OpenAI
+from pydantic import BaseModel, Field
 
 from app.knowledge import KnowledgeBase
 from app.settings import get_settings
@@ -51,6 +51,36 @@ def require_kb() -> KnowledgeBase:
     return kb
 
 
+def safe_destination(filename: str) -> Path:
+    cleaned = Path(filename).name.strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="One of the uploaded files has no valid filename.")
+    dest = Path(settings.knowledge_dir) / cleaned
+    return dest
+
+
+def save_upload(upload: UploadFile) -> str:
+    suffix = Path(upload.filename or "").suffix.lower()
+    if suffix not in get_extensions():
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unsupported file type for '{upload.filename}'. "
+                f"Allowed: {', '.join(sorted(get_extensions()))}"
+            ),
+        )
+
+    destination = safe_destination(upload.filename or "")
+    with destination.open("wb") as output:
+        while True:
+            chunk = upload.file.read(1024 * 1024)
+            if not chunk:
+                break
+            output.write(chunk)
+
+    return str(destination)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     ensure_directories()
@@ -59,7 +89,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Coachable AI Assistant", version="1.3.0", lifespan=lifespan)
+app = FastAPI(title="Coachable AI Assistant", version="1.4.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 
@@ -74,6 +104,14 @@ class IngestResponse(BaseModel):
     index_path: str
     skipped_files: list[str] = []
     rebuilt: bool | None = None
+
+
+class UploadResponse(BaseModel):
+    uploaded_files: list[str]
+    saved_to: str
+    indexed: bool
+    message: str
+    ingest: IngestResponse | None = None
 
 
 def read_principles() -> str:
@@ -124,6 +162,44 @@ def refresh() -> dict[str, Any]:
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Refresh failed: {exc}") from exc
+
+
+@app.post("/upload", response_model=UploadResponse)
+def upload(files: list[UploadFile] = File(...)) -> dict[str, Any]:
+    ensure_directories()
+
+    if not files:
+        raise HTTPException(status_code=400, detail="No files were uploaded.")
+
+    saved_files: list[str] = []
+    try:
+        for upload_file in files:
+            saved_path = save_upload(upload_file)
+            saved_files.append(saved_path)
+    finally:
+        for upload_file in files:
+            upload_file.file.close()
+
+    if client is None or kb is None:
+        return {
+            "uploaded_files": saved_files,
+            "saved_to": settings.knowledge_dir,
+            "indexed": False,
+            "message": (
+                "Files were uploaded successfully. Add OPENAI_API_KEY to .env and restart the app "
+                "to index and chat with them."
+            ),
+            "ingest": None,
+        }
+
+    ingest_result = require_kb().ensure_index(settings.knowledge_dir, get_extensions())
+    return {
+        "uploaded_files": saved_files,
+        "saved_to": settings.knowledge_dir,
+        "indexed": True,
+        "message": "Files uploaded and knowledge index refreshed.",
+        "ingest": ingest_result,
+    }
 
 
 @app.post("/chat")
